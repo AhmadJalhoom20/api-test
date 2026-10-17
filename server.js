@@ -2,14 +2,17 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const helmet = require('helmet');
 const os = require('os');
-const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const db = require('./db');
 
 const app = express();
 const server = http.createServer(app);
+
+// Initialize Socket.io with strict CORS
 const io = new Server(server, {
   cors: {
     origin: '*',
@@ -20,12 +23,46 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 1. Disable identifying headers
+app.disable('x-powered-by');
 
-// Serve frontend static files
-app.use(express.static(path.join(__dirname, 'public')));
+// 2. Enterprise Security Headers via Helmet
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'none'"],
+        frameAncestors: ["'none'"]
+      }
+    },
+    frameguard: { action: 'deny' },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true
+    },
+    noSniff: true,
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+);
+
+// 3. Additional custom enterprise security headers middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=(), payment=()');
+  res.removeHeader('X-Powered-By');
+  next();
+});
+
+// 4. Standard parsers & CORS
+app.use(cors());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Initialize database
 db.initDB().then((res) => {
@@ -40,16 +77,14 @@ io.on('connection', (socket) => {
   io.emit('userCount', onlineCount);
 
   let currentRoom = 'general';
-  let currentUser = 'مجهول';
+  let currentUser = 'Anonymous';
 
-  // Join Room
   socket.on('joinRoom', async ({ room, username }) => {
     socket.leave(currentRoom);
     currentRoom = room || 'general';
-    currentUser = username || 'مجهول';
+    currentUser = username || 'Anonymous';
     socket.join(currentRoom);
 
-    // Fetch message history for this room from SQL DB
     try {
       const result = await db.query(
         'SELECT * FROM messages WHERE room = $1 ORDER BY id DESC LIMIT 50',
@@ -62,16 +97,14 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle incoming chat message
   socket.on('chatMessage', async (data) => {
     const room = data.room || currentRoom || 'general';
-    const username = data.username || currentUser || 'مجهول';
+    const username = data.username || currentUser || 'Anonymous';
     const text = (data.text || '').trim();
 
     if (!text) return;
 
     try {
-      // Save to SQL Database
       const result = await db.query(
         'INSERT INTO messages (room, username, text, created_at) VALUES ($1, $2, $3, $4) RETURNING *',
         [room, username, text, new Date().toISOString()]
@@ -84,14 +117,12 @@ io.on('connection', (socket) => {
         created_at: new Date().toISOString()
       };
 
-      // Broadcast to everyone in the room
       io.to(room).emit('message', savedMessage);
     } catch (err) {
       console.error('Error saving message to SQL:', err.message);
     }
   });
 
-  // User typing notification
   socket.on('typing', (data) => {
     socket.to(data.room || currentRoom).emit('userTyping', {
       username: data.username || currentUser,
@@ -105,11 +136,8 @@ io.on('connection', (socket) => {
   });
 });
 
-// REST API Endpoints
-
+// Helper for Hardware and Specs
 function getDetailedHardwareInfo() {
-  const fs = require('fs');
-  // RAM Info (parses /proc/meminfo on Linux for exact host values like `free -h`)
   let ram = {
     totalGB: +(os.totalmem() / (1024 ** 3)).toFixed(2),
     freeGB: +(os.freemem() / (1024 ** 3)).toFixed(2),
@@ -133,7 +161,7 @@ function getDetailedHardwareInfo() {
         if (parts.length === 2) {
           const key = parts[0].trim();
           const val = parseInt(parts[1].trim(), 10);
-          if (!isNaN(val)) memMap[key] = val; // values in kB
+          if (!isNaN(val)) memMap[key] = val;
         }
       }
       if (memMap.MemTotal) {
@@ -164,7 +192,6 @@ function getDetailedHardwareInfo() {
     console.error('Error reading /proc/meminfo:', err.message);
   }
 
-  // Disk Info (using fs.statfsSync on root /)
   let disk = {
     totalGB: 0,
     usedGB: 0,
@@ -188,7 +215,6 @@ function getDetailedHardwareInfo() {
     console.error('Error reading disk stat:', err.message);
   }
 
-  // CPU Info
   const cpus = os.cpus() || [];
   let cpuModel = cpus[0]?.model || 'Unknown CPU';
   try {
@@ -240,12 +266,47 @@ function formatUptime(seconds) {
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
   const parts = [];
-  if (d > 0) parts.push(`${d} يوم`);
-  if (h > 0) parts.push(`${h} ساعة`);
-  if (m > 0) parts.push(`${m} دقيقة`);
-  parts.push(`${s} ثانية`);
-  return parts.join(' و ');
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
 }
+
+// ROOT: Pure JSON Welcome & Service Discovery (NO HTML)
+app.get('/', (req, res) => {
+  res.json({
+    service: 'Ahmad Enterprise Backend API',
+    status: 'ONLINE',
+    version: '1.0.0',
+    type: 'RESTful API & WebSockets Server',
+    environment: process.env.NODE_ENV || 'production',
+    securityHeaders: {
+      helmet: 'ENABLED',
+      hsts: 'ACTIVE',
+      contentSecurityPolicy: 'ACTIVE',
+      xFrameOptions: 'DENY',
+      xContentTypeOptions: 'nosniff',
+      xPoweredBy: 'HIDDEN'
+    },
+    runtime: {
+      node: process.version,
+      port: PORT,
+      uptimeSeconds: Math.floor(process.uptime()),
+      database: db.getStatus().mode
+    },
+    endpoints: {
+      root: 'GET /',
+      health: 'GET /api/health',
+      hardware: 'GET /api/hardware',
+      stats: 'GET /api/stats',
+      chatHistory: 'GET /api/chat/messages?room=general&limit=50',
+      chatSend: 'POST /api/chat/send',
+      dbStatus: 'GET /api/db/status',
+      dbQuery: 'POST /api/db/query'
+    }
+  });
+});
 
 // GET /api/health
 app.get('/api/health', (req, res) => {
@@ -261,7 +322,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// GET /api/hardware (Detailed Server Specs)
+// GET /api/hardware (Server Specs: RAM, CPU, Disk, Swap)
 app.get('/api/hardware', (req, res) => {
   res.json(getDetailedHardwareInfo());
 });
@@ -298,7 +359,7 @@ app.get('/api/chat/messages', async (req, res) => {
   }
 });
 
-// POST /api/chat/send (REST fallback for chat)
+// POST /api/chat/send
 app.post('/api/chat/send', async (req, res) => {
   const { room, username, text } = req.body;
   if (!text || typeof text !== 'string') {
@@ -306,7 +367,7 @@ app.post('/api/chat/send', async (req, res) => {
   }
 
   const roomName = room || 'general';
-  const userName = username || 'مجهول';
+  const userName = username || 'Anonymous';
 
   try {
     const result = await db.query(
@@ -315,7 +376,6 @@ app.post('/api/chat/send', async (req, res) => {
     );
     const saved = result.rows[0];
 
-    // Also broadcast to connected websockets
     io.to(roomName).emit('message', saved);
 
     res.status(201).json({ success: true, data: saved });
@@ -329,7 +389,7 @@ app.get('/api/db/status', (req, res) => {
   res.json(db.getStatus());
 });
 
-// POST /api/db/query (Interactive SQL Runner for Studio)
+// POST /api/db/query
 app.post('/api/db/query', async (req, res) => {
   const { sql } = req.body;
   if (!sql || typeof sql !== 'string') {
@@ -349,12 +409,26 @@ app.post('/api/db/query', async (req, res) => {
   }
 });
 
-// Fallback to index.html for SPA routing
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// 404 Handler (JSON only)
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: 'The requested API endpoint does not exist',
+    path: req.originalUrl,
+    timestamp: new Date().toISOString()
+  });
 });
 
-// Start HTTP + WebSocket Server
+// Global Error Handler (JSON only)
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    error: 'Internal Server Error',
+    message: err.message || 'An unexpected error occurred'
+  });
+});
+
+// Start Server
 server.listen(PORT, HOST, () => {
-  console.log(`Server running with WebSockets & SQL on http://${HOST}:${PORT}`);
+  console.log(`Pure Backend API running on http://${HOST}:${PORT}`);
 });
