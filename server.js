@@ -1,9 +1,22 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const os = require('os');
+const path = require('path');
 require('dotenv').config();
 
+const db = require('./db');
+
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
 
@@ -11,141 +24,113 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// In-memory data store for live CRUD testing
-let items = [
-  { id: 1, title: 'اختبار الباك إند', done: true, createdAt: new Date().toISOString() },
-  { id: 2, title: 'فحص الاتصال بالسيرفر الحقيقي', done: false, createdAt: new Date().toISOString() }
-];
-let nextId = 3;
+// Serve frontend static files
+app.use(express.static(path.join(__dirname, 'public')));
 
-// Root: Interactive HTML test dashboard
-app.get('/', (req, res) => {
-  const uptimeSeconds = Math.floor(process.uptime());
-  res.send(`<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Backend Status - Verification</title>
-  <style>
-    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
-    .container { max-width: 800px; margin: 0 auto; }
-    .badge { display: inline-block; background: #22c55e; color: #000; font-weight: bold; padding: 6px 14px; border-radius: 9999px; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-top: 16px; }
-    h1 { margin-top: 0; font-size: 24px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
-    .stat { background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155; }
-    .stat-label { font-size: 12px; color: #94a3b8; }
-    .stat-val { font-size: 16px; font-weight: bold; margin-top: 4px; word-break: break-all; }
-    button { background: #3b82f6; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; margin: 4px; }
-    button:hover { background: #2563eb; }
-    pre { background: #020617; padding: 12px; border-radius: 6px; overflow-x: auto; color: #38bdf8; text-align: left; dir: ltr; font-size: 13px; }
-    a { color: #60a5fa; text-decoration: none; }
-    a:hover { text-decoration: underline; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h1>الباك إند شغال بنجاح 🚀</h1>
-      <span class="badge">ONLINE (LIVE)</span>
-    </div>
-    <p style="color:#94a3b8;">هذا السيرفر يعمل على Node.js Express داخل الحاوية السحابية الخاصة بك.</p>
-
-    <div class="card">
-      <h3 style="margin-top:0;">معلومات النظام الفورية</h3>
-      <div class="grid">
-        <div class="stat"><div class="stat-label">إصدار Node.js</div><div class="stat-val">${process.version}</div></div>
-        <div class="stat"><div class="stat-label">المنفذ (PORT)</div><div class="stat-val">${PORT}</div></div>
-        <div class="stat"><div class="stat-label">مدة التشغيل (Uptime)</div><div class="stat-val">${uptimeSeconds} ثانية</div></div>
-        <div class="stat"><div class="stat-label">نظام التشغيل</div><div class="stat-val">${os.type()} (${os.arch()})</div></div>
-        <div class="stat"><div class="stat-label">اسم المضيف (Hostname)</div><div class="stat-val">${os.hostname()}</div></div>
-        <div class="stat"><div class="stat-label">قاعدة البيانات المعرفة</div><div class="stat-val">${process.env.DATABASE_URL ? 'نعم (DATABASE_URL متوفر)' : 'غير متصل بعد'}</div></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3 style="margin-top:0;">تجربة استدعاء API مباشرة من المتصفح</h3>
-      <div>
-        <button onclick="callApi('/api/health')">فحص الصحة (GET /api/health)</button>
-        <button onclick="callApi('/api/info')">تفاصيل السيرفر (GET /api/info)</button>
-        <button onclick="callApi('/api/todos')">جلب العناصر (GET /api/todos)</button>
-        <button onclick="addTodo()">إضافة عنصر جديد (POST /api/todos)</button>
-        <button onclick="callApi('/api/db-test')">فحص قاعدة البيانات (GET /api/db-test)</button>
-      </div>
-      <pre id="api-output">// اضغط على أي زر لتنفيذ طلب HTTP حقيقي ورؤية الاستجابة من السيرفر...</pre>
-    </div>
-
-    <div class="card">
-      <h3 style="margin-top:0;">روابط JSON مباشرة</h3>
-      <ul>
-        <li><a href="/api/health" target="_blank">/api/health</a></li>
-        <li><a href="/api/info" target="_blank">/api/info</a></li>
-        <li><a href="/api/todos" target="_blank">/api/todos</a></li>
-        <li><a href="/api/db-test" target="_blank">/api/db-test</a></li>
-      </ul>
-    </div>
-  </div>
-
-  <script>
-    async function callApi(endpoint) {
-      const out = document.getElementById('api-output');
-      out.textContent = 'جاري التحميل...';
-      try {
-        const res = await fetch(endpoint);
-        const data = await res.json();
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        out.textContent = 'خطأ: ' + err.message;
-      }
-    }
-
-    async function addTodo() {
-      const out = document.getElementById('api-output');
-      const title = prompt('اكتب عنوان العنصر:', 'عنصر تجريبي تم إنشاؤه في ' + new Date().toLocaleTimeString());
-      if (!title) return;
-      out.textContent = 'جاري الإرسال...';
-      try {
-        const res = await fetch('/api/todos', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title })
-        });
-        const data = await res.json();
-        out.textContent = JSON.stringify(data, null, 2);
-      } catch (err) {
-        out.textContent = 'خطأ: ' + err.message;
-      }
-    }
-  </script>
-</body>
-</html>`);
+// Initialize database
+db.initDB().then((res) => {
+  console.log(`Database initialized in [${res.mode}] mode.`);
 });
+
+// Socket.io Real-time Chat
+let onlineCount = 0;
+
+io.on('connection', (socket) => {
+  onlineCount++;
+  io.emit('userCount', onlineCount);
+
+  let currentRoom = 'general';
+  let currentUser = 'مجهول';
+
+  // Join Room
+  socket.on('joinRoom', async ({ room, username }) => {
+    socket.leave(currentRoom);
+    currentRoom = room || 'general';
+    currentUser = username || 'مجهول';
+    socket.join(currentRoom);
+
+    // Fetch message history for this room from SQL DB
+    try {
+      const result = await db.query(
+        'SELECT * FROM messages WHERE room = $1 ORDER BY id DESC LIMIT 50',
+        [currentRoom]
+      );
+      const messages = [...result.rows].reverse();
+      socket.emit('roomHistory', messages);
+    } catch (err) {
+      console.error('Error fetching room history:', err.message);
+    }
+  });
+
+  // Handle incoming chat message
+  socket.on('chatMessage', async (data) => {
+    const room = data.room || currentRoom || 'general';
+    const username = data.username || currentUser || 'مجهول';
+    const text = (data.text || '').trim();
+
+    if (!text) return;
+
+    try {
+      // Save to SQL Database
+      const result = await db.query(
+        'INSERT INTO messages (room, username, text, created_at) VALUES ($1, $2, $3, $4) RETURNING *',
+        [room, username, text, new Date().toISOString()]
+      );
+
+      const savedMessage = result.rows[0] || {
+        room,
+        username,
+        text,
+        created_at: new Date().toISOString()
+      };
+
+      // Broadcast to everyone in the room
+      io.to(room).emit('message', savedMessage);
+    } catch (err) {
+      console.error('Error saving message to SQL:', err.message);
+    }
+  });
+
+  // User typing notification
+  socket.on('typing', (data) => {
+    socket.to(data.room || currentRoom).emit('userTyping', {
+      username: data.username || currentUser,
+      room: data.room || currentRoom
+    });
+  });
+
+  socket.on('disconnect', () => {
+    onlineCount = Math.max(0, onlineCount - 1);
+    io.emit('userCount', onlineCount);
+  });
+});
+
+// REST API Endpoints
 
 // GET /api/health
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     deployed: true,
-    message: 'Backend is running live and responding',
+    platform: 'Taqat Cloud',
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
     nodeVersion: process.version,
     port: PORT,
-    environment: process.env.NODE_ENV || 'production'
+    database: db.getStatus().mode
   });
 });
 
-// GET /api/info
-app.get('/api/info', (req, res) => {
+// GET /api/stats
+app.get('/api/stats', (req, res) => {
   const mem = process.memoryUsage();
   res.json({
     system: {
       platform: os.platform(),
-      release: os.release(),
       arch: os.arch(),
       hostname: os.hostname(),
       cpus: os.cpus().length,
+      nodeVersion: process.version,
       freeMemoryMB: Math.round(os.freemem() / 1024 / 1024),
       totalMemoryMB: Math.round(os.totalmem() / 1024 / 1024)
     },
@@ -156,105 +141,90 @@ app.get('/api/info', (req, res) => {
       heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
       rssMB: Math.round(mem.rss / 1024 / 1024)
     },
-    env: {
-      port: PORT,
-      nodeEnv: process.env.NODE_ENV || 'not set',
-      hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
-      hasDbHost: Boolean(process.env.DB_HOST)
-    }
+    chat: {
+      onlineUsers: onlineCount
+    },
+    database: db.getStatus()
   });
 });
 
-// CRUD: GET /api/todos
-app.get('/api/todos', (req, res) => {
-  res.json({
-    success: true,
-    count: items.length,
-    data: items
-  });
-});
-
-// CRUD: POST /api/todos
-app.post('/api/todos', (req, res) => {
-  const { title } = req.body;
-  if (!title || typeof title !== 'string') {
-    return res.status(400).json({ success: false, error: 'title is required' });
-  }
-  const newItem = {
-    id: nextId++,
-    title: title.trim(),
-    done: false,
-    createdAt: new Date().toISOString()
-  };
-  items.push(newItem);
-  res.status(201).json({ success: true, message: 'Item created successfully', data: newItem });
-});
-
-// CRUD: PUT /api/todos/:id
-app.put('/api/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const item = items.find(i => i.id === id);
-  if (!item) {
-    return res.status(404).json({ success: false, error: 'Item not found' });
-  }
-  if (req.body.title !== undefined) item.title = String(req.body.title);
-  if (req.body.done !== undefined) item.done = Boolean(req.body.done);
-  item.updatedAt = new Date().toISOString();
-  res.json({ success: true, message: 'Item updated successfully', data: item });
-});
-
-// CRUD: DELETE /api/todos/:id
-app.delete('/api/todos/:id', (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  const initialLen = items.length;
-  items = items.filter(i => i.id !== id);
-  if (items.length === initialLen) {
-    return res.status(404).json({ success: false, error: 'Item not found' });
-  }
-  res.json({ success: true, message: `Item ${id} deleted successfully` });
-});
-
-// Reset CRUD
-app.post('/api/todos/reset', (req, res) => {
-  items = [
-    { id: 1, title: 'اختبار الباك إند', done: true, createdAt: new Date().toISOString() },
-    { id: 2, title: 'فحص الاتصال بالسيرفر الحقيقي', done: false, createdAt: new Date().toISOString() }
-  ];
-  nextId = 3;
-  res.json({ success: true, message: 'Data reset to default', data: items });
-});
-
-// Database connectivity check
-app.get('/api/db-test', (req, res) => {
-  const dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl) {
-    return res.json({
-      databaseConnected: false,
-      message: 'DATABASE_URL environment variable is not defined yet. Add a database in the platform dashboard to test auto-wiring.',
-      envDetected: {
-        DATABASE_URL: false,
-        DB_HOST: process.env.DB_HOST || null,
-        DB_PORT: process.env.DB_PORT || null,
-        DB_DATABASE: process.env.DB_DATABASE || null
-      }
+// GET /api/chat/messages
+app.get('/api/chat/messages', async (req, res) => {
+  const room = req.query.room || 'general';
+  const limit = parseInt(req.query.limit, 10) || 50;
+  try {
+    const result = await db.query(
+      'SELECT * FROM messages WHERE room = $1 ORDER BY id DESC LIMIT $2',
+      [room, limit]
+    );
+    res.json({
+      success: true,
+      room,
+      count: result.rows.length,
+      data: result.rows.reverse()
     });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/chat/send (REST fallback for chat)
+app.post('/api/chat/send', async (req, res) => {
+  const { room, username, text } = req.body;
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ success: false, error: 'text is required' });
   }
 
-  // Mask credentials for safety
-  const masked = dbUrl.replace(/:\/\/[^:]+:[^@]+@/, '://***:***@');
-  res.json({
-    databaseConnected: true,
-    message: 'DATABASE_URL detected successfully!',
-    connectionStringPreview: masked
-  });
+  const roomName = room || 'general';
+  const userName = username || 'مجهول';
+
+  try {
+    const result = await db.query(
+      'INSERT INTO messages (room, username, text, created_at) VALUES ($1, $2, $3, $4) RETURNING *',
+      [roomName, userName, text.trim(), new Date().toISOString()]
+    );
+    const saved = result.rows[0];
+
+    // Also broadcast to connected websockets
+    io.to(roomName).emit('message', saved);
+
+    res.status(201).json({ success: true, data: saved });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found', path: req.originalUrl });
+// GET /api/db/status
+app.get('/api/db/status', (req, res) => {
+  res.json(db.getStatus());
 });
 
-// Start server
-app.listen(PORT, HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
+// POST /api/db/query (Interactive SQL Runner for Studio)
+app.post('/api/db/query', async (req, res) => {
+  const { sql } = req.body;
+  if (!sql || typeof sql !== 'string') {
+    return res.status(400).json({ error: 'SQL query string is required' });
+  }
+
+  try {
+    const result = await db.query(sql);
+    res.json({
+      success: true,
+      mode: result.mode,
+      rowCount: result.rowCount,
+      rows: result.rows
+    });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// Fallback to index.html for SPA routing
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Start HTTP + WebSocket Server
+server.listen(PORT, HOST, () => {
+  console.log(`Server running with WebSockets & SQL on http://${HOST}:${PORT}`);
 });

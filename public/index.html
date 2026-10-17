@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ahmad Pro Cloud Backend | شات حقيقي & SQL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(17, 24, 39, 0.75);
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.25);
+      --success: #10b981;
+      --purple: #a855f7;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Cairo', -apple-system, sans-serif;
+      background: radial-gradient(circle at 10% 20%, #0f172a 0%, #070a12 100%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      background: rgba(15, 23, 42, 0.6);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 16px 24px;
+    }
+
+    .header-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .brand-title {
+      font-size: 20px;
+      font-weight: 800;
+      background: linear-gradient(90deg, #ffffff, #38bdf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header-badges {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #34d399;
+      box-shadow: 0 0 8px #34d399;
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.2); }
+      100% { opacity: 0.4; transform: scale(0.9); }
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      border-bottom: 1px solid var(--border);
+      max-width: 1400px;
+      width: 100%;
+      margin: 14px auto 0;
+      padding: 0 24px;
+    }
+
+    .nav-tab {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 10px 18px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s;
+    }
+
+    .nav-tab.active {
+      color: #38bdf8;
+    }
+
+    .nav-tab.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: #38bdf8;
+      border-radius: 3px 3px 0 0;
+      box-shadow: 0 -2px 10px #38bdf8;
+    }
+
+    main {
+      max-width: 1400px;
+      width: 100%;
+      margin: 20px auto;
+      padding: 0 24px;
+      flex: 1;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    /* Layout for Chat */
+    .chat-container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      height: 680px;
+    }
+
+    @media (max-width: 850px) {
+      .chat-container { grid-template-columns: 1fr; height: auto; }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .room-btn {
+      width: 100%;
+      background: none;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      padding: 12px 14px;
+      border-radius: 10px;
+      text-align: right;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      transition: all 0.2s;
+    }
+
+    .room-btn:hover {
+      background: rgba(255,255,255,0.04);
+      color: var(--text-main);
+    }
+
+    .room-btn.active {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+    }
+
+    .user-profile-box {
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(0,0,0,0.2);
+    }
+
+    .input-field {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: white;
+      padding: 10px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    .input-field:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+    }
+
+    /* Chat Messages Box */
+    .messages-box {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .message-item {
+      display: flex;
+      gap: 12px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: #1e293b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
+
+    .msg-content {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 16px;
+      max-width: 80%;
+    }
+
+    .msg-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .msg-author {
+      font-weight: 700;
+      font-size: 13px;
+      color: #38bdf8;
+    }
+
+    .msg-time {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .msg-text {
+      font-size: 14px;
+      line-height: 1.5;
+      color: #e2e8f0;
+      word-break: break-word;
+    }
+
+    .chat-input-bar {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      background: rgba(0,0,0,0.2);
+    }
+
+    .btn-send {
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      border: none;
+      color: white;
+      font-family: inherit;
+      font-weight: 700;
+      padding: 0 24px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .btn-send:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4);
+    }
+
+    /* SQL Studio */
+    .sql-grid {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 850px) {
+      .sql-grid { grid-template-columns: 1fr; }
+    }
+
+    .table-list-item {
+      padding: 12px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .table-list-item:hover, .table-list-item.active {
+      background: rgba(255,255,255,0.04);
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.2);
+    }
+
+    .sql-editor {
+      width: 100%;
+      height: 100px;
+      background: #020617;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      color: #38bdf8;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      resize: vertical;
+      direction: ltr;
+      text-align: left;
+    }
+
+    .data-table-container {
+      overflow-x: auto;
+      margin-top: 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: right;
+    }
+
+    th {
+      background: rgba(30, 41, 59, 0.9);
+      padding: 12px;
+      color: #94a3b8;
+      font-weight: 700;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: #e2e8f0;
+    }
+
+    tr:hover td {
+      background: rgba(255,255,255,0.02);
+    }
+
+    /* System Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 900;
+      color: white;
+      margin-top: 6px;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .stat-sub {
+      font-size: 12px;
+      color: #38bdf8;
+      margin-top: 4px;
+    }
+  </style>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+
+  <header>
+    <div class="header-content">
+      <div class="brand">
+        <div class="brand-logo">⚡</div>
+        <div>
+          <div class="brand-title">Ahmad Pro Backend Cloud</div>
+          <div style="font-size:12px; color:var(--text-muted);">نظام باك إند هجين: WebSockets Chat + SQL Database Engine</div>
+        </div>
+      </div>
+      <div class="header-badges">
+        <span class="badge" id="db-badge">
+          <span class="pulse"></span>
+          <span id="db-status-text">جاري فحص SQL...</span>
+        </span>
+        <span class="badge" style="background:rgba(56,189,248,0.15); color:#38bdf8; border-color:rgba(56,189,248,0.3);">
+          👥 متصلون: <span id="online-count">1</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="nav-tabs">
+      <button class="nav-tab active" onclick="switchTab('chat')">💬 الشات الحي (WebSocket)</button>
+      <button class="nav-tab" onclick="switchTab('sql')">🗄️ استوديو SQL والجداول</button>
+      <button class="nav-tab" onclick="switchTab('api')">⚡ اختبار الـ API</button>
+      <button class="nav-tab" onclick="switchTab('system')">🖥️ مواصفات السيرفر والحاوية</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- TAB 1: REALTIME CHAT -->
+    <div id="tab-chat" class="tab-pane active">
+      <div class="chat-container">
+        <!-- Sidebar -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">غرف المحادثة</div>
+          </div>
+          <div style="padding:14px; flex:1;">
+            <button class="room-btn active" onclick="changeRoom('general', this)">
+              <span># عامة (general)</span>
+              <span style="font-size:11px; opacity:0.7;">الافتراضية</span>
+            </button>
+            <button class="room-btn" onclick="changeRoom('dev-chat', this)">
+              <span># مبرمجين (dev-chat)</span>
+            </button>
+            <button class="room-btn" onclick="changeRoom('vip-lounge', this)">
+              <span># كبار الشخصيات (vip)</span>
+            </button>
+          </div>
+
+          <div class="user-profile-box">
+            <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:6px;">اسمك المستعار:</label>
+            <input type="text" id="username-input" class="input-field" value="Ahmad_Tester" placeholder="اكتب اسمك...">
+          </div>
+        </div>
+
+        <!-- Chat Main Area -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span id="current-room-title"># عامة (general)</span>
+            </div>
+            <span style="font-size:12px; color:var(--text-muted);">الرسائل تحفظ تلقائياً في قاعدة بيانات SQL</span>
+          </div>
+
+          <div class="messages-box" id="messages-box">
+            <!-- Messages stream here -->
+          </div>
+
+          <div style="padding: 0 20px; font-size:12px; color: #38bdf8; min-height: 18px;" id="typing-indicator"></div>
+
+          <div class="chat-input-bar">
+            <input type="text" id="message-input" class="input-field" placeholder="اكتب رسالتك واضغط Enter..." onkeydown="handleKey(event)" oninput="handleTyping()">
+            <button class="btn-send" onclick="sendMessage()">
+              <span>إرسال</span>
+              <span>🚀</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: SQL STUDIO -->
+    <div id="tab-sql" class="tab-pane">
+      <div class="sql-grid">
+        <div class="card" style="padding:16px;">
+          <h3 style="font-size:16px; margin-bottom:12px; color:#38bdf8;">جداول قاعدة البيانات</h3>
+          <div class="table-list-item active" onclick="loadTableData('messages', this)">
+            <span>📋 messages (الرسائل)</span>
+            <span id="count-messages" class="badge" style="font-size:11px; padding:2px 8px;">0</span>
+          </div>
+          <div class="table-list-item" onclick="loadTableData('users', this)">
+            <span>👤 users (المستخدمين)</span>
+            <span id="count-users" class="badge" style="font-size:11px; padding:2px 8px;">0</span>
+          </div>
+          <div class="table-list-item" onclick="loadTableData('rooms', this)">
+            <span>🏷️ rooms (الغرف)</span>
+            <span id="count-rooms" class="badge" style="font-size:11px; padding:2px 8px;">0</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="font-size:16px;">محرر استعلامات SQL الفوري</h3>
+            <button class="btn-send" style="padding:8px 16px; font-size:13px;" onclick="runCustomSql()">تنفيذ الاستعلام (Run SQL)</button>
+          </div>
+          <textarea id="sql-query-input" class="sql-editor">SELECT * FROM messages ORDER BY id DESC LIMIT 10;</textarea>
+
+          <div class="data-table-container">
+            <table id="sql-result-table">
+              <thead><tr id="sql-table-head"><th>جاري جلب البيانات...</th></tr></thead>
+              <tbody id="sql-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: REST API TEST BENCH -->
+    <div id="tab-api" class="tab-pane">
+      <div class="card" style="padding:24px;">
+        <h3 style="margin-bottom:14px;">نقاط اتصال REST API المباشرة</h3>
+        <p style="color:var(--text-muted); font-size:14px; margin-bottom:20px;">يمكنك اختبار جميع نقاط النهاية بالنقر المباشر دون الحاجة لبرنامج Postman:</p>
+
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
+          <button class="btn-send" style="background:#2563eb;" onclick="testApi('/api/health')">GET /api/health</button>
+          <button class="btn-send" style="background:#0891b2;" onclick="testApi('/api/stats')">GET /api/stats</button>
+          <button class="btn-send" style="background:#7c3aed;" onclick="testApi('/api/chat/messages?room=' + currentRoom)">GET /api/chat/messages</button>
+          <button class="btn-send" style="background:#059669;" onclick="testApi('/api/db/status')">GET /api/db/status</button>
+        </div>
+
+        <pre id="api-result-box" style="background:#020617; padding:16px; border-radius:10px; color:#38bdf8; direction:ltr; text-align:left; font-size:13px; max-height:350px; overflow-y:auto; border:1px solid var(--border);">// اضغط على أي زر أعلاه لرؤية استجابة الـ API الفورية...</pre>
+      </div>
+    </div>
+
+    <!-- TAB 4: SYSTEM & CONTAINER MONITOR -->
+    <div id="tab-system" class="tab-pane">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">نوع البيئة ونظام التشغيل</div>
+          <div class="stat-value" id="sys-os">Linux (x64)</div>
+          <div class="stat-sub" id="sys-container">الحاوية السحابية نشطة</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">إصدار Node.js</div>
+          <div class="stat-value" id="sys-node">v22.x</div>
+          <div class="stat-sub">محرك تشغيل JavaScript السحابي</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">استهلاك الذاكرة (Heap Used)</div>
+          <div class="stat-value" id="sys-mem">-- MB</div>
+          <div class="stat-sub" id="sys-rss">إجمالي الرام المخصصة: --</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">مدة تشغيل الخادم (Uptime)</div>
+          <div class="stat-value" id="sys-uptime">-- ثانية</div>
+          <div class="stat-sub">يعمل باستقرار بدون انقطاع</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let socket;
+    let currentRoom = 'general';
+    let typingTimeout;
+
+    // Connect WebSocket
+    function initSocket() {
+      socket = io({
+        reconnectionDelay: 1000,
+        reconnection: true
+      });
+
+      socket.on('connect', () => {
+        console.log('Socket connected:', socket.id);
+        socket.emit('joinRoom', { room: currentRoom, username: getUsername() });
+      });
+
+      socket.on('message', (msg) => {
+        addMessageToUI(msg);
+      });
+
+      socket.on('roomHistory', (messages) => {
+        const box = document.getElementById('messages-box');
+        box.innerHTML = '';
+        messages.forEach(addMessageToUI);
+      });
+
+      socket.on('userCount', (count) => {
+        document.getElementById('online-count').textContent = count;
+      });
+
+      socket.on('userTyping', (data) => {
+        const indicator = document.getElementById('typing-indicator');
+        if (data.username && data.room === currentRoom) {
+          indicator.textContent = data.username + ' يكتب الآن...';
+          clearTimeout(typingTimeout);
+          typingTimeout = setTimeout(() => { indicator.textContent = ''; }, 2000);
+        }
+      });
+    }
+
+    function getUsername() {
+      const input = document.getElementById('username-input');
+      return (input.value.trim() || 'Ahmad_Guest');
+    }
+
+    function addMessageToUI(msg) {
+      const box = document.getElementById('messages-box');
+      const div = document.createElement('div');
+      div.className = 'message-item';
+
+      const time = new Date(msg.created_at || Date.now()).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+      div.innerHTML = `
+        <div class="msg-avatar">${msg.username === 'Ahmad_Admin' ? '👑' : (msg.username === 'Taqat_Bot' ? '🤖' : '👤')}</div>
+        <div class="msg-content">
+          <div class="msg-header">
+            <span class="msg-author">${escapeHtml(msg.username)}</span>
+            <span class="msg-time">${time}</span>
+          </div>
+          <div class="msg-text">${escapeHtml(msg.text)}</div>
+        </div>
+      `;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('message-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      const payload = {
+        room: currentRoom,
+        username: getUsername(),
+        text: text
+      };
+
+      if (socket && socket.connected) {
+        socket.emit('chatMessage', payload);
+      } else {
+        // Fallback HTTP POST
+        fetch('/api/chat/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        }).then(r => r.json()).then(res => {
+          if (res.data) addMessageToUI(res.data);
+        });
+      }
+
+      input.value = '';
+      input.focus();
+    }
+
+    function handleKey(e) {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    }
+
+    function handleTyping() {
+      if (socket && socket.connected) {
+        socket.emit('typing', { room: currentRoom, username: getUsername() });
+      }
+    }
+
+    function changeRoom(room, btn) {
+      currentRoom = room;
+      document.querySelectorAll('.room-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('current-room-title').textContent = '# ' + room;
+      if (socket && socket.connected) {
+        socket.emit('joinRoom', { room, username: getUsername() });
+      }
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      
+      const btn = event.target;
+      btn.classList.add('active');
+      document.getElementById('tab-' + tab).classList.add('active');
+
+      if (tab === 'sql') loadTableData('messages');
+      if (tab === 'system') refreshStats();
+    }
+
+    // SQL Explorer
+    async function loadTableData(tableName, el) {
+      if (el) {
+        document.querySelectorAll('.table-list-item').forEach(i => i.classList.remove('active'));
+        el.classList.add('active');
+      }
+      document.getElementById('sql-query-input').value = 'SELECT * FROM ' + tableName + ' ORDER BY id DESC LIMIT 15;';
+      runCustomSql();
+    }
+
+    async function runCustomSql() {
+      const sql = document.getElementById('sql-query-input').value;
+      const head = document.getElementById('sql-table-head');
+      const body = document.getElementById('sql-table-body');
+      head.innerHTML = '<th>جاري التنفيذ...</th>';
+      body.innerHTML = '';
+
+      try {
+        const res = await fetch('/api/db/query', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sql })
+        });
+        const data = await res.json();
+        
+        if (!data.rows || data.rows.length === 0) {
+          head.innerHTML = '<th>النتيجة</th>';
+          body.innerHTML = '<tr><td style="text-align:center; color:var(--text-muted);">لا توجد صفوف مطابقة</td></tr>';
+          return;
+        }
+
+        const keys = Object.keys(data.rows[0]);
+        head.innerHTML = keys.map(k => '<th>' + escapeHtml(k) + '</th>').join('');
+        body.innerHTML = data.rows.map(row => {
+          return '<tr>' + keys.map(k => '<td>' + escapeHtml(String(row[k])) + '</td>').join('') + '</tr>';
+        }).join('');
+      } catch (err) {
+        head.innerHTML = '<th>خطأ في الاستعلام</th>';
+        body.innerHTML = '<tr><td style="color:#ef4444;">' + escapeHtml(err.message) + '</td></tr>';
+      }
+    }
+
+    // API Testing
+    async function testApi(url) {
+      const box = document.getElementById('api-result-box');
+      box.textContent = 'جاري طلب: ' + url + ' ...';
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        box.textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        box.textContent = 'خطأ: ' + e.message;
+      }
+    }
+
+    // System Monitor
+    async function refreshStats() {
+      try {
+        const res = await fetch('/api/stats');
+        const d = await res.json();
+        document.getElementById('sys-os').textContent = d.system.platform + ' (' + d.system.arch + ')';
+        document.getElementById('sys-container').textContent = 'Hostname: ' + d.system.hostname;
+        document.getElementById('sys-node').textContent = d.system.nodeVersion;
+        document.getElementById('sys-mem').textContent = d.process.heapUsedMB + ' MB';
+        document.getElementById('sys-rss').textContent = 'RSS: ' + d.process.rssMB + ' MB';
+        document.getElementById('sys-uptime').textContent = d.process.uptimeSeconds + ' ثانية';
+      } catch (e) {}
+    }
+
+    async function checkDbStatus() {
+      try {
+        const res = await fetch('/api/db/status');
+        const d = await res.json();
+        const badgeText = document.getElementById('db-status-text');
+        if (d.isPostgres) {
+          badgeText.textContent = '🐘 PostgreSQL (Live Cloud DB)';
+        } else {
+          badgeText.textContent = '⚡ SQL Engine (Active)';
+        }
+        if (d.counts) {
+          document.getElementById('count-messages').textContent = d.counts.messages;
+          document.getElementById('count-users').textContent = d.counts.users;
+          document.getElementById('count-rooms').textContent = d.counts.rooms;
+        }
+      } catch (e) {}
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Auto-init
+    initSocket();
+    checkDbStatus();
+    setInterval(checkDbStatus, 10000);
+    setInterval(refreshStats, 5000);
+  </script>
+</body>
+</html>

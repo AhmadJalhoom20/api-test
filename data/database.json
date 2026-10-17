@@ -1,0 +1,59 @@
+{
+  "users": [
+    {
+      "id": 1,
+      "username": "Ahmad_Admin",
+      "role": "admin",
+      "avatar": "👑",
+      "created_at": "2026-10-17T12:29:21.816Z"
+    },
+    {
+      "id": 2,
+      "username": "Taqat_Bot",
+      "role": "bot",
+      "avatar": "🤖",
+      "created_at": "2026-10-17T12:59:21.816Z"
+    }
+  ],
+  "rooms": [
+    {
+      "id": 1,
+      "name": "general",
+      "description": "الغرفة العامة للنقاشات السريعة",
+      "created_at": "2026-10-17T13:29:21.816Z"
+    },
+    {
+      "id": 2,
+      "name": "dev-chat",
+      "description": "غرفة المطورين والباك إند",
+      "created_at": "2026-10-17T13:29:21.816Z"
+    },
+    {
+      "id": 3,
+      "name": "vip-lounge",
+      "description": "غرفة كبار الشخصيات",
+      "created_at": "2026-10-17T13:29:21.816Z"
+    }
+  ],
+  "messages": [
+    {
+      "id": 1,
+      "room": "general",
+      "username": "Taqat_Bot",
+      "text": "أهلاً بك في شات المنصة المتكامل مع قاعدة بيانات SQL!",
+      "created_at": "2026-10-17T13:27:21.816Z"
+    },
+    {
+      "id": 2,
+      "room": "general",
+      "username": "Ahmad_Admin",
+      "text": "الباك إند شغال بأعلى مواصفات وسرعة فائقة 🚀",
+      "created_at": "2026-10-17T13:28:21.816Z"
+    }
+  ],
+  "nextIds": {
+    "users": 3,
+    "rooms": 4,
+    "messages": 3
+  }
+}
