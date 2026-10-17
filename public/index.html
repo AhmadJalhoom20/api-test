@@ -432,41 +432,23 @@
       background: rgba(255,255,255,0.02);
     }
 
-    /* System Stats Grid */
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      gap: 16px;
+    /* Hardware Meter Bars */
+    .progress-bar-bg {
+      width: 100%;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 10px;
     }
-
-    .stat-card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 18px;
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.5s ease;
     }
-
-    .stat-label {
-      font-size: 13px;
-      color: var(--text-muted);
-      font-weight: 600;
-    }
-
-    .stat-value {
-      font-size: 24px;
-      font-weight: 900;
-      color: white;
-      margin-top: 6px;
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-    }
-
-    .stat-sub {
-      font-size: 12px;
-      color: #38bdf8;
-      margin-top: 4px;
-    }
+    .bar-ram { background: linear-gradient(90deg, #10b981, #3b82f6); }
+    .bar-disk { background: linear-gradient(90deg, #06b6d4, #8b5cf6); }
+    .bar-swap { background: linear-gradient(90deg, #f59e0b, #ef4444); }
   </style>
   <script src="/socket.io/socket.io.js"></script>
 </head>
@@ -496,7 +478,7 @@
       <button class="nav-tab active" onclick="switchTab('chat')">💬 الشات الحي (WebSocket)</button>
       <button class="nav-tab" onclick="switchTab('sql')">🗄️ استوديو SQL والجداول</button>
       <button class="nav-tab" onclick="switchTab('api')">⚡ اختبار الـ API</button>
-      <button class="nav-tab" onclick="switchTab('system')">🖥️ مواصفات السيرفر والحاوية</button>
+      <button class="nav-tab" onclick="switchTab('system')">🖥️ مواصفات السيرفر والعتاد (Hardware)</button>
     </div>
   </header>
 
@@ -598,7 +580,7 @@
 
         <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:16px;">
           <button class="btn-send" style="background:#2563eb;" onclick="testApi('/api/health')">GET /api/health</button>
-          <button class="btn-send" style="background:#0891b2;" onclick="testApi('/api/stats')">GET /api/stats</button>
+          <button class="btn-send" style="background:#0891b2;" onclick="testApi('/api/hardware')">GET /api/hardware</button>
           <button class="btn-send" style="background:#7c3aed;" onclick="testApi('/api/chat/messages?room=' + currentRoom)">GET /api/chat/messages</button>
           <button class="btn-send" style="background:#059669;" onclick="testApi('/api/db/status')">GET /api/db/status</button>
         </div>
@@ -607,28 +589,88 @@
       </div>
     </div>
 
-    <!-- TAB 4: SYSTEM & CONTAINER MONITOR -->
+    <!-- TAB 4: SYSTEM & HARDWARE MONITOR -->
     <div id="tab-system" class="tab-pane">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h2 style="font-size:20px; font-weight:800; color:#38bdf8;">مواصفات السيرفر والعتاد المباشرة</h2>
+        <button class="btn-send" style="padding:6px 14px; font-size:13px;" onclick="refreshStats()">🔄 تحديث فوري</button>
+      </div>
+
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">نوع البيئة ونظام التشغيل</div>
-          <div class="stat-value" id="sys-os">Linux (x64)</div>
-          <div class="stat-sub" id="sys-container">الحاوية السحابية نشطة</div>
+        <!-- RAM Card -->
+        <div class="stat-card" style="grid-column: span 2;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="stat-label">الذاكرة العشوائية الكاملة (Host RAM)</div>
+            <span id="ram-badge" class="badge" style="font-size:11px;">مباشر من السيرفر</span>
+          </div>
+          <div class="stat-value">
+            <span id="ram-used">--</span> <span style="font-size:16px; color:var(--text-muted); font-weight:normal;">من إجمالي</span> <span id="ram-total">--</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div id="ram-progress" class="progress-bar-fill bar-ram" style="width: 0%;"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:var(--text-muted);">
+            <div>المتاح للاستخدام (Available): <b id="ram-avail" style="color:#10b981;">--</b></div>
+            <div>نسبة الاستهلاك: <b id="ram-pct" style="color:#38bdf8;">--%</b></div>
+          </div>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">إصدار Node.js</div>
-          <div class="stat-value" id="sys-node">v22.x</div>
-          <div class="stat-sub">محرك تشغيل JavaScript السحابي</div>
+
+        <!-- DISK Card -->
+        <div class="stat-card" style="grid-column: span 2;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="stat-label">مساحة التخزين والقرص الصلب (Disk Storage)</div>
+            <span class="badge" style="font-size:11px; background:rgba(6,182,212,0.15); color:#06b6d4;">نظام الملفات /</span>
+          </div>
+          <div class="stat-value">
+            <span id="disk-used">--</span> <span style="font-size:16px; color:var(--text-muted); font-weight:normal;">مستخدم من</span> <span id="disk-total">--</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div id="disk-progress" class="progress-bar-fill bar-disk" style="width: 0%;"></div>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:var(--text-muted);">
+            <div>المساحة المتبقية (Free): <b id="disk-free" style="color:#06b6d4;">--</b></div>
+            <div>النسبة: <b id="disk-pct" style="color:#a855f7;">--%</b></div>
+          </div>
         </div>
+
+        <!-- CPU Card -->
         <div class="stat-card">
-          <div class="stat-label">استهلاك الذاكرة (Heap Used)</div>
-          <div class="stat-value" id="sys-mem">-- MB</div>
-          <div class="stat-sub" id="sys-rss">إجمالي الرام المخصصة: --</div>
+          <div class="stat-label">المعالج (CPU)</div>
+          <div class="stat-value" id="cpu-cores">-- Cores</div>
+          <div class="stat-sub" id="cpu-model" style="font-size:12px; color:#e2e8f0; margin-top:4px; word-break:break-word;">جاري القراءة...</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:8px;">
+            ضغط المعالج (Load): <b id="cpu-load" style="color:#38bdf8;">--</b>
+          </div>
         </div>
+
+        <!-- SWAP Card -->
         <div class="stat-card">
-          <div class="stat-label">مدة تشغيل الخادم (Uptime)</div>
-          <div class="stat-value" id="sys-uptime">-- ثانية</div>
-          <div class="stat-sub">يعمل باستقرار بدون انقطاع</div>
+          <div class="stat-label">الذاكرة التبادلية (Swap Memory)</div>
+          <div class="stat-value" id="swap-val">-- GB</div>
+          <div class="progress-bar-bg">
+            <div id="swap-progress" class="progress-bar-fill bar-swap" style="width: 0%;"></div>
+          </div>
+          <div class="stat-sub" id="swap-details" style="margin-top:8px;">مستخدم: -- | فارغ: --</div>
+        </div>
+
+        <!-- CONTAINER & OS Card -->
+        <div class="stat-card">
+          <div class="stat-label">الحاوية السحابية (Container)</div>
+          <div class="stat-value" id="sys-hostname" style="font-size:18px;">--</div>
+          <div class="stat-sub" id="sys-os-full">Linux (x64)</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:8px;">
+            النواة: <span id="sys-kernel">--</span>
+          </div>
+        </div>
+
+        <!-- UPTIME & NODE Card -->
+        <div class="stat-card">
+          <div class="stat-label">مدة التشغيل وإصدار Node</div>
+          <div class="stat-value" id="sys-node-val" style="font-size:18px;">Node v22</div>
+          <div class="stat-sub" id="sys-uptime-formatted" style="font-size:12px; color:#10b981; margin-top:4px;">--</div>
+          <div style="font-size:12px; color:var(--text-muted); margin-top:8px;">
+            ذاكرة Node الخاصة: <span id="node-heap">-- MB</span>
+          </div>
         </div>
       </div>
     </div>
@@ -817,18 +859,57 @@
       }
     }
 
-    // System Monitor
+    // System & Hardware Monitor
     async function refreshStats() {
       try {
-        const res = await fetch('/api/stats');
-        const d = await res.json();
-        document.getElementById('sys-os').textContent = d.system.platform + ' (' + d.system.arch + ')';
-        document.getElementById('sys-container').textContent = 'Hostname: ' + d.system.hostname;
-        document.getElementById('sys-node').textContent = d.system.nodeVersion;
-        document.getElementById('sys-mem').textContent = d.process.heapUsedMB + ' MB';
-        document.getElementById('sys-rss').textContent = 'RSS: ' + d.process.rssMB + ' MB';
-        document.getElementById('sys-uptime').textContent = d.process.uptimeSeconds + ' ثانية';
-      } catch (e) {}
+        const res = await fetch('/api/hardware');
+        const hw = await res.json();
+        
+        // RAM
+        const ram = hw.ram;
+        document.getElementById('ram-used').textContent = ram.usedGB + ' GB';
+        document.getElementById('ram-total').textContent = ram.totalGB + ' GB';
+        document.getElementById('ram-avail').textContent = ram.availableGB + ' GB';
+        document.getElementById('ram-pct').textContent = ram.usedPercent + '%';
+        document.getElementById('ram-progress').style.width = Math.min(100, Math.max(2, ram.usedPercent)) + '%';
+        if (ram.source) document.getElementById('ram-badge').textContent = ram.source;
+
+        // Disk
+        const disk = hw.disk;
+        document.getElementById('disk-used').textContent = disk.usedGB + ' GB';
+        document.getElementById('disk-total').textContent = disk.totalGB + ' GB';
+        document.getElementById('disk-free').textContent = disk.freeGB + ' GB';
+        document.getElementById('disk-pct').textContent = disk.usedPercent + '%';
+        document.getElementById('disk-progress').style.width = Math.min(100, Math.max(2, disk.usedPercent)) + '%';
+
+        // CPU
+        const cpu = hw.cpu;
+        document.getElementById('cpu-cores').textContent = cpu.cores + ' Cores';
+        document.getElementById('cpu-model').textContent = cpu.model;
+        if (cpu.loadAvg) {
+          document.getElementById('cpu-load').textContent = cpu.loadAvg['1m'] + ' (1m) | ' + cpu.loadAvg['5m'] + ' (5m)';
+        }
+
+        // Swap
+        const swap = ram;
+        document.getElementById('swap-val').textContent = swap.swapTotalGB + ' GB';
+        document.getElementById('swap-progress').style.width = Math.min(100, Math.max(0, swap.swapUsedPercent)) + '%';
+        document.getElementById('swap-details').textContent = 'مستخدم: ' + swap.swapUsedGB + ' GB | متبقي: ' + swap.swapFreeGB + ' GB (' + swap.swapUsedPercent + '%)';
+
+        // Container & OS
+        const sys = hw.system;
+        document.getElementById('sys-hostname').textContent = sys.hostname;
+        document.getElementById('sys-os-full').textContent = sys.type + ' (' + sys.arch + ')';
+        document.getElementById('sys-kernel').textContent = sys.release;
+
+        // Uptime & Node
+        const proc = hw.process;
+        document.getElementById('sys-node-val').textContent = proc.nodeVersion;
+        document.getElementById('sys-uptime-formatted').textContent = sys.uptimeFormatted || (proc.appUptimeSeconds + ' ثانية');
+        document.getElementById('node-heap').textContent = proc.heapUsedMB + ' MB (RSS: ' + proc.rssMB + ' MB)';
+      } catch (e) {
+        console.error('Failed to refresh stats:', e);
+      }
     }
 
     async function checkDbStatus() {

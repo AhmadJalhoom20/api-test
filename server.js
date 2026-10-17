@@ -107,6 +107,146 @@ io.on('connection', (socket) => {
 
 // REST API Endpoints
 
+function getDetailedHardwareInfo() {
+  const fs = require('fs');
+  // RAM Info (parses /proc/meminfo on Linux for exact host values like `free -h`)
+  let ram = {
+    totalGB: +(os.totalmem() / (1024 ** 3)).toFixed(2),
+    freeGB: +(os.freemem() / (1024 ** 3)).toFixed(2),
+    usedGB: +((os.totalmem() - os.freemem()) / (1024 ** 3)).toFixed(2),
+    usedPercent: +(((os.totalmem() - os.freemem()) / os.totalmem()) * 100).toFixed(1),
+    availableGB: +(os.freemem() / (1024 ** 3)).toFixed(2),
+    swapTotalGB: 0,
+    swapUsedGB: 0,
+    swapFreeGB: 0,
+    swapUsedPercent: 0,
+    source: 'os'
+  };
+
+  try {
+    if (fs.existsSync('/proc/meminfo')) {
+      const content = fs.readFileSync('/proc/meminfo', 'utf8');
+      const lines = content.split('\n');
+      const memMap = {};
+      for (const line of lines) {
+        const parts = line.split(':');
+        if (parts.length === 2) {
+          const key = parts[0].trim();
+          const val = parseInt(parts[1].trim(), 10);
+          if (!isNaN(val)) memMap[key] = val; // values in kB
+        }
+      }
+      if (memMap.MemTotal) {
+        const totalKB = memMap.MemTotal;
+        const availKB = memMap.MemAvailable || (memMap.MemFree + (memMap.Buffers || 0) + (memMap.Cached || 0));
+        const freeKB = memMap.MemFree || 0;
+        const usedKB = totalKB - availKB;
+
+        const swapTotalKB = memMap.SwapTotal || 0;
+        const swapFreeKB = memMap.SwapFree || 0;
+        const swapUsedKB = swapTotalKB - swapFreeKB;
+
+        ram = {
+          totalGB: +(totalKB / 1024 / 1024).toFixed(2),
+          usedGB: +(usedKB / 1024 / 1024).toFixed(2),
+          availableGB: +(availKB / 1024 / 1024).toFixed(2),
+          freeKB: +(freeKB / 1024 / 1024).toFixed(2),
+          usedPercent: +((usedKB / totalKB) * 100).toFixed(1),
+          swapTotalGB: +(swapTotalKB / 1024 / 1024).toFixed(2),
+          swapUsedGB: +(swapUsedKB / 1024 / 1024).toFixed(2),
+          swapFreeGB: +(swapFreeKB / 1024 / 1024).toFixed(2),
+          swapUsedPercent: swapTotalKB > 0 ? +((swapUsedKB / swapTotalKB) * 100).toFixed(1) : 0,
+          source: '/proc/meminfo (Linux Host)'
+        };
+      }
+    }
+  } catch (err) {
+    console.error('Error reading /proc/meminfo:', err.message);
+  }
+
+  // Disk Info (using fs.statfsSync on root /)
+  let disk = {
+    totalGB: 0,
+    usedGB: 0,
+    freeGB: 0,
+    usedPercent: 0
+  };
+  try {
+    const rootPath = os.platform() === 'win32' ? process.cwd() : '/';
+    const stat = fs.statfsSync(rootPath);
+    const totalBytes = stat.bsize * stat.blocks;
+    const freeBytes = stat.bsize * stat.bavail;
+    const usedBytes = totalBytes - freeBytes;
+    disk = {
+      totalGB: +(totalBytes / (1024 ** 3)).toFixed(2),
+      usedGB: +(usedBytes / (1024 ** 3)).toFixed(2),
+      freeGB: +(freeBytes / (1024 ** 3)).toFixed(2),
+      usedPercent: totalBytes > 0 ? +((usedBytes / totalBytes) * 100).toFixed(1) : 0,
+      mount: rootPath
+    };
+  } catch (err) {
+    console.error('Error reading disk stat:', err.message);
+  }
+
+  // CPU Info
+  const cpus = os.cpus() || [];
+  let cpuModel = cpus[0]?.model || 'Unknown CPU';
+  try {
+    if (fs.existsSync('/proc/cpuinfo')) {
+      const cpuContent = fs.readFileSync('/proc/cpuinfo', 'utf8');
+      const match = cpuContent.match(/model name\s*:\s*(.+)/i);
+      if (match && match[1]) cpuModel = match[1].trim();
+    }
+  } catch (err) {}
+
+  const loadAvg = os.loadavg();
+
+  return {
+    ram,
+    disk,
+    cpu: {
+      model: cpuModel,
+      cores: cpus.length,
+      speedMHz: cpus[0]?.speed || 0,
+      loadAvg: {
+        '1m': +loadAvg[0].toFixed(2),
+        '5m': +loadAvg[1].toFixed(2),
+        '15m': +loadAvg[2].toFixed(2)
+      }
+    },
+    system: {
+      platform: os.platform(),
+      type: os.type(),
+      release: os.release(),
+      arch: os.arch(),
+      hostname: os.hostname(),
+      uptimeSeconds: Math.floor(os.uptime()),
+      uptimeFormatted: formatUptime(os.uptime())
+    },
+    process: {
+      pid: process.pid,
+      nodeVersion: process.version,
+      appUptimeSeconds: Math.floor(process.uptime()),
+      heapUsedMB: +(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(1),
+      heapTotalMB: +(process.memoryUsage().heapTotal / 1024 / 1024).toFixed(1),
+      rssMB: +(process.memoryUsage().rss / 1024 / 1024).toFixed(1)
+    }
+  };
+}
+
+function formatUptime(seconds) {
+  const d = Math.floor(seconds / (3600 * 24));
+  const h = Math.floor((seconds % (3600 * 24)) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const parts = [];
+  if (d > 0) parts.push(`${d} يوم`);
+  if (h > 0) parts.push(`${h} ساعة`);
+  if (m > 0) parts.push(`${m} دقيقة`);
+  parts.push(`${s} ثانية`);
+  return parts.join(' و ');
+}
+
 // GET /api/health
 app.get('/api/health', (req, res) => {
   res.json({
@@ -121,26 +261,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// GET /api/hardware (Detailed Server Specs)
+app.get('/api/hardware', (req, res) => {
+  res.json(getDetailedHardwareInfo());
+});
+
 // GET /api/stats
 app.get('/api/stats', (req, res) => {
-  const mem = process.memoryUsage();
+  const hw = getDetailedHardwareInfo();
   res.json({
-    system: {
-      platform: os.platform(),
-      arch: os.arch(),
-      hostname: os.hostname(),
-      cpus: os.cpus().length,
-      nodeVersion: process.version,
-      freeMemoryMB: Math.round(os.freemem() / 1024 / 1024),
-      totalMemoryMB: Math.round(os.totalmem() / 1024 / 1024)
-    },
-    process: {
-      pid: process.pid,
-      uptimeSeconds: Math.floor(process.uptime()),
-      heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
-      heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
-      rssMB: Math.round(mem.rss / 1024 / 1024)
-    },
+    hardware: hw,
     chat: {
       onlineUsers: onlineCount
     },
